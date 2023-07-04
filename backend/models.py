@@ -1,7 +1,7 @@
 from datetime import datetime
-from app import app, db
+from app import db
 
-db.init_app(app)
+db = SQLAlchemy(app)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
