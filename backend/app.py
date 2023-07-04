@@ -1,12 +1,27 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_session import Session
+from functools import wraps
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///book_recommendations.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-CORS(app)  
+app.config['SECRET_KEY'] = 'your-secret-key'  # Add your own secret key here
+app.config['SESSION_TYPE'] = 'filesystem'  # Use filesystem-based sessions
+CORS(app)
+Session(app)
+
+
+# Decorator for protecting routes that require authentication
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify(message='Unauthorized'), 401
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -24,6 +39,7 @@ def signup():
     
     return jsonify(message='User registered successfully')
 
+
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -32,17 +48,20 @@ def login():
     
     user = User.query.filter_by(username=username).first()
     if user and user.password == password:
-        # TODO: Implement session management and return a session token or cookie
+        session['user_id'] = user.id  # Store the user ID in the session
         return jsonify(message='User logged in successfully')
     
     return jsonify(message='Invalid username or password')
 
+
 @app.route('/logout', methods=['GET'])
 def logout():
-    # TODO: Implement session logout logic
+    session.pop('user_id', None)  # Remove the user ID from the session
     return jsonify(message='User logged out successfully')
 
+
 @app.route('/books', methods=['GET'])
+@login_required
 def get_books():
     books = Book.query.all()
     book_list = []
@@ -57,7 +76,9 @@ def get_books():
     
     return jsonify(books=book_list)
 
+
 @app.route('/books', methods=['POST'])
+@login_required
 def create_book():
     data = request.get_json()
     title = data['title']
@@ -70,7 +91,9 @@ def create_book():
     
     return jsonify(message='Book created successfully')
 
+
 @app.route('/books/<book_id>', methods=['PUT'])
+@login_required
 def update_book(book_id):
     data = request.get_json()
     title = data['title']
@@ -88,7 +111,9 @@ def update_book(book_id):
     
     return jsonify(message='Book not found')
 
+
 @app.route('/books/<book_id>', methods=['DELETE'])
+@login_required
 def delete_book(book_id):
     book = Book.query.get(book_id)
     if book:
@@ -99,7 +124,9 @@ def delete_book(book_id):
     
     return jsonify(message='Book not found')
 
+
 @app.route('/books/<book_id>/reviews', methods=['POST'])
+@login_required
 def add_review(book_id):
     data = request.get_json()
     rating = data['rating']
@@ -116,6 +143,7 @@ def add_review(book_id):
     return jsonify(message='Book not found')
 
 @app.route('/books/<book_id>/reviews', methods=['GET'])
+@login_required
 def get_reviews(book_id):
     book = Book.query.get(book_id)
     if book:
